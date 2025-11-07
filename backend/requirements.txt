@@ -9,3 +9,4 @@ bcrypt
 pydantic[email]
 PyJWT
 python-multipart
+psycopg2
