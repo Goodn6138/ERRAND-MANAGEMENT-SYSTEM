@@ -10,9 +10,7 @@ from typing import List, Optional
 import jwt
 import os
 
-import sys, bcrypt
-print("Python:", sys.version)
-print("bcrypt version:", getattr(bcrypt, "__version__", "unknown"))
+
 
 # Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./errand_management.db")
