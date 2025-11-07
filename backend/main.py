@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import create_engine, Column, String, Integer, DateTime, ForeignKey, JSON
@@ -9,8 +9,6 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 import jwt
 import os
-
-
 
 # Configuration
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./errand_management.db")
@@ -151,13 +149,26 @@ def get_db():
         db.close()
 
 
-def get_current_user(token: str = None, db: Session = Depends(get_db)):
-    if not token:
+# <CHANGE> Extract token from Authorization header with Bearer scheme
+def get_token_from_header(authorization: Optional[str] = Header(None)) -> str:
+    if not authorization:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Missing authorization header",
         )
+    
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authorization header format",
+        )
+    
+    return parts[1]
+
+
+# <CHANGE> Verify token and return user
+def get_current_user(token: str = Depends(get_token_from_header), db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
@@ -231,32 +242,17 @@ def register(user_register: UserRegister, db: Session = Depends(get_db)):
     return {"access_token": access_token, "token_type": "bearer"}
 
 
+# <CHANGE> Updated to use Depends for token extraction and user verification
 @app.post("/api/v1/customers/{customer_id}/customer-requests/", response_model=ServiceRequestResponse)
 def create_service_request(
     customer_id: int,
     request_data: ServiceRequestCreate,
-    token: str = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Create a new service request"""
-    # Get current user (verify token)
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
-    
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-        )
-    
-    user = db.query(User).filter(User.email == email).first()
-    if not user or user.id != customer_id:
+    # Verify the customer_id matches the current user
+    if current_user.id != customer_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only create requests for your own account",
@@ -276,30 +272,16 @@ def create_service_request(
     return db_request
 
 
+# <CHANGE> Updated to use Depends for token extraction and user verification
 @app.get("/api/v1/customers/{customer_id}/customer-requests/", response_model=List[ServiceRequestResponse])
 def get_customer_requests(
     customer_id: int,
-    token: str = None,
+    current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """Get all service requests for a customer"""
-    if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
-    
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        email: str = payload.get("sub")
-    except jwt.InvalidTokenError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-        )
-    
-    user = db.query(User).filter(User.email == email).first()
-    if not user or user.id != customer_id:
+    # Verify the customer_id matches the current user
+    if current_user.id != customer_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You can only view your own requests",
@@ -308,16 +290,17 @@ def get_customer_requests(
     requests = db.query(CustomerRequest).filter(CustomerRequest.customer_id == customer_id).all()
     return requests
 
+
 @app.get("/api/v1/me")
-def get_current_user_info(token: str = None, db: Session = Depends(get_db)):
-    if not token:
-        raise HTTPException(status_code=401, detail="Missing token")
-    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    email = payload.get("sub")
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return {"id": user.id, "email": user.email, "first_name": user.first_name}
+def get_current_user_info(current_user: User = Depends(get_current_user)):
+    """Get current user info"""
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "first_name": current_user.first_name,
+        "last_name": current_user.last_name,
+    }
+
 
 @app.get("/api/v1/health")
 def health_check():
