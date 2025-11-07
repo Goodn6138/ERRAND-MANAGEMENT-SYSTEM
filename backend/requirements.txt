@@ -10,3 +10,4 @@ pydantic[email]
 PyJWT
 python-multipart
 psycopg2
+passlib[argon2]
