@@ -307,6 +307,16 @@ def get_customer_requests(
     requests = db.query(CustomerRequest).filter(CustomerRequest.customer_id == customer_id).all()
     return requests
 
+@app.get("/api/v1/me")
+def get_current_user_info(token: str = None, db: Session = Depends(get_db)):
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing token")
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    email = payload.get("sub")
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"id": user.id, "email": user.email, "first_name": user.first_name}
 
 @app.get("/api/v1/health")
 def health_check():
