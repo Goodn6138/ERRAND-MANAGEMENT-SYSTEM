@@ -14,7 +14,7 @@ import os
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./errand_management.db")
 SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 30))
 
 # Database setup
 engine = create_engine(
