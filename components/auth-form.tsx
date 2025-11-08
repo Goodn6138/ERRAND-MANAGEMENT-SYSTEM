@@ -35,15 +35,16 @@ export function AuthForm() {
     setIsLoading(true)
 
     try {
-      const response = await authAPI.login(loginData)
-      const userData = {
-        id: response.user?.id || 1,
-        email: response.user?.email || loginData.email,
-        first_name: response.user?.first_name || "User",
-        last_name: response.user?.last_name || "",
+      const result = await authAPI.login(loginData)
+      const { token, user } = result
+
+      if (!token || !user) {
+        throw new Error("Server did not return authentication token or user data")
       }
-      login(userData, response.token)
+
+      login(user, token)
     } catch (err) {
+      console.error("[v0] Login error:", err)
       setError(err instanceof Error ? err.message : "Login failed")
     } finally {
       setIsLoading(false)
@@ -56,15 +57,16 @@ export function AuthForm() {
     setIsLoading(true)
 
     try {
-      const response = await authAPI.register(registerData)
-      const userData = {
-        id: response.user?.id || 1,
-        email: response.user?.email || registerData.email,
-        first_name: registerData.first_name,
-        last_name: registerData.last_name,
+      const result = await authAPI.register(registerData)
+      const { token, user } = result
+
+      if (!token || !user) {
+        throw new Error("Server did not return authentication token or user data")
       }
-      login(userData, response.token)
+
+      login(user, token)
     } catch (err) {
+      console.error("[v0] Register error:", err)
       setError(err instanceof Error ? err.message : "Registration failed")
     } finally {
       setIsLoading(false)
